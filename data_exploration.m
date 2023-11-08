@@ -50,8 +50,6 @@ for idx_ss = static_slc
     nan_idx = isnan(comb_table.pm2d5(:,idx_ss));
     plot(comb_table.time(~nan_idx), comb_table.pm2d5(~nan_idx,idx_ss),...
         'Marker', '.', 'LineStyle', '-', 'Color', C_1(idx_ss,:));
-        % 'LineStyle', '-', 'Color', C_1(idx_ss,:));
-        % 'Marker', '.', 'LineStyle', '-', 'Color', C_1(idx_ss,:));
     title(strcat("Static Sensor ", num2str(idx_ss)));
 end
 
