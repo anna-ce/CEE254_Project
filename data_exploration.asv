@@ -56,16 +56,16 @@ comb_table.hour_cos = hour_cos;
 
 %% Test GPR
 % predictors_2_use = {'humiditiy', 'temperature', 'lat', 'lon', 'day_sin', 'day_cos', 'hour_sin', 'hour_cos'};
-predictors_2_use = {'lat', 'lon', 'day_sin', 'day_cos', 'hour_sin', 'hour_cos'};
+% predictors_2_use = {'lat', 'lon', 'day_sin', 'day_cos', 'hour_sin', 'hour_cos'};
 
 % gprMdl_trial = fitrgp(comb_table, 'ResponseVarName', {'pm2d5'}, 'PredictorNames', predictors_2_use, 'FitMethod', 'fic', ...
 %     'Standardize',true, 'Holdout', 0.3);
 
-% gprMdl_trial = fitrgp('Tbl', comb_table, 'formula', 'pm2d5~lat+lon+day_sin+day_cos+hour_sin+hour_cos', 'FitMethod', 'fic', ...
-%     'Standardize', true, 'Holdout', 0.3);
+gprMdl_trial = fitrgp('Tbl', comb_table, 'formula', 'pm2d5~lat+lon+day_sin+day_cos+hour_sin+hour_cos', 'FitMethod', 'fic', ...
+    'Standardize', true, 'Holdout', 0.3);
 
 
-gprMdl_trial = fitrgp(comb_table.pm2d5, comb_table.humidity);
+gprMdl_trial = fitrgb(comb_table.pm2d5, comb_table(:))
 
 % y~x1+x2+x3
 
