@@ -1,80 +1,74 @@
-%% Script for Data Exploration
+%% Script for Prediction of Long-Term Data
 clear; clc; close all;
 
-tjlt = load("long_term_tianjin_train_val.mat");
-tjst = load("short_term_foshan_train_val.mat");
-% load("long_term_tianjin_train_val.mat");
+%% Analysis Control
+predopt.mode = "long-term";
 
-dt_start = datetime("2018-04-24T00:00",'InputFormat','uuuu-MM-dd''T''HH:mm');
-dt_end = datetime("2018-05-22T00:00",'InputFormat','uuuu-MM-dd''T''HH:mm');
+%% Load data
+% TODO to be replaced by preprocessed data
+switch predopt.mode
+    case "long-term"
+        fldt = load("long_term_tianjin_train_val.mat");
 
-time = transpose(dt_start:minutes(1):dt_end);
+    case "short-term"
+        fldt = load("short_term_foshan_train_val.mat");
 
-% new giant table, with info about where it came from
-table_all = table();
-
-for idx_ss = 1:1:size(tjlt.data_static,2)
-    some_table = tjlt.data_static{1,idx_ss};
-    some_table.sensor_type = repmat("static",size(some_table,1),1);
-    some_table.sensor_num = repmat(idx_ss,size(some_table,1),1);
-    table_all = vertcat(table_all, some_table);
 end
 
-for idx_ms = 1:1:size(tjlt.data_mobile,2)
-    some_table = tjlt.data_mobile{1,idx_ms};
-    some_table.sensor_type = repmat("mobile",size(some_table,1),1);
-    some_table.sensor_num = repmat(idx_ms,size(some_table,1),1);
-    table_all = vertcat(table_all, some_table);
-end
+% Aggregated table
+tbl_all = vertcat_tables(fldt);
 
-comb_table = table_all;
-
-% Weekly
-% how many weeks in data? 
-% find indices for each week
-disp(strcat("There are ", num2str(days(dt_end - dt_start)/7), " week(s) in data"));
-num_weeks = floor(days(dt_end - dt_start)/7);
+% Deprecated
+% dt_start = datetime("2018-04-24T00:00",'InputFormat','uuuu-MM-dd''T''HH:mm');
+% dt_end = datetime("2018-05-22T00:00",'InputFormat','uuuu-MM-dd''T''HH:mm');
+% 
+% time = transpose(dt_start:minutes(1):dt_end);
 
 
-%% Encoding cyclical datetime info. as features
+%% Additional feature generation
+% Cyclic features related to 
 % for weekday (1~7)
-[day_sin, day_cos] = cyc_feat_transf(weekday(comb_table.time),7);
-comb_table.day_sin = day_sin;
-comb_table.day_cos = day_cos;
+[day_sin, day_cos] = cyc_feat_transf(weekday(tbl_all.time),7);
+tbl_all.day_sin = day_sin;
+tbl_all.day_cos = day_cos;
 
 % for hour of day (0~23)
-[hour_sin, hour_cos] = cyc_feat_transf(hour(comb_table.time),24);
-comb_table.hour_sin = hour_sin;
-comb_table.hour_cos = hour_cos;
+[hour_sin, hour_cos] = cyc_feat_transf(hour(tbl_all.time),24);
+tbl_all.hour_sin = hour_sin;
+tbl_all.hour_cos = hour_cos;
+
+% for minute of time (0~59)
+[min_sin, min_cos] = cyc_feat_transf(minute(tbl_all.time),60);
+tbl_all.min_sin = min_sin;
+tbl_all.min_cos = min_cos;
+
+% TODO check assumption that there will be no second(s) step sizes
 
 % figure;
-% scatter(comb_table.day_sin, comb_table.pm2d5);
-% scatter(comb_table.day_cos, comb_table.day_sin);
+% scatter(tbl_all.min_cos, tbl_all.min_sin);
+% scatter(tbl_all.day_sin, tbl_all.pm2d5);
+% scatter(tbl_all.day_cos, tbl_all.day_sin);
 
 %% Some scatter plots
 
 
 %% Test GPR
-% predictors_2_use = {'humiditiy', 'temperature', 'lat', 'lon', 'day_sin', 'day_cos', 'hour_sin', 'hour_cos'};
-% predictors_2_use = {'lat', 'lon', 'day_sin', 'day_cos', 'hour_sin', 'hour_cos'};
+subset_table = {'pm2d5', 'humidity', 'temperature', 'lat', 'lon', ...
+    'day_sin', 'day_cos', 'hour_sin', 'hour_cos', 'min_sin', 'min_cos'};
 
-% gprMdl_trial = fitrgp(comb_table, 'ResponseVarName', {'pm2d5'}, 'PredictorNames', predictors_2_use, 'FitMethod', 'fic', ...
-%     'Standardize',true, 'Holdout', 0.3);
+tbl_subset = tbl_all(:, subset_table);
 
-gprMdl_trial = fitrgp('Tbl', comb_table, 'formula', 'pm2d5~lat+lon+day_sin+day_cos+hour_sin+hour_cos', 'FitMethod', 'fic', ...
-    'Standardize', true, 'Holdout', 0.3);
+cvgprMdl_trial = fitrgp(tbl_subset, 'pm2d5', ...
+    'KernelFunction','ardsquaredexponential',...
+    'FitMethod', 'fic', 'PredictMethod', 'fic',...
+    'Standardize',true, 'Holdout', 0.3);
 
+kfoldLoss(cvgprMdl_trial);
 
-gprMdl_trial = fitrgb(comb_table.pm2d5, comb_table(:))
-
-% y~x1+x2+x3
-
-kfoldLoss(gprMdl_trial)
-
-ypred = kfoldPredict(gprMdl_trial);
+ypred = kfoldPredict(cvgprMdl_trial);
 
 figure();
-plot(ypred(gprMdl_trial.Partition.test));
+plot(ypred(cvgprMdl_trial.Partition.test));
 hold on;
 y = table2array(tbl(:,end));
 plot(y(cvgprMdl.Partition.test),'r.');
@@ -182,6 +176,25 @@ figure;
 % web(filename);
 
 %% In-line functions
+function [tbl_all] = vertcat_tables(ld_file)
+    % new giant table, with info about where it came from
+    tbl_all = table();
+    
+    for idx_ss = 1:1:size(ld_file.data_static,2)
+        some_table = ld_file.data_static{1,idx_ss};
+        some_table.sensor_type = repmat("static",size(some_table,1),1);
+        some_table.sensor_num = repmat(idx_ss,size(some_table,1),1);
+        tbl_all = vertcat(tbl_all, some_table);
+    end
+    
+    for idx_ms = 1:1:size(ld_file.data_mobile,2)
+        some_table = ld_file.data_mobile{1,idx_ms};
+        some_table.sensor_type = repmat("mobile",size(some_table,1),1);
+        some_table.sensor_num = repmat(idx_ms,size(some_table,1),1);
+        tbl_all = vertcat(tbl_all, some_table);
+    end
+end
+
 function [comb_table] = comb_tables(lddt,time)
     % Input params:
     % lddt: loaded data
