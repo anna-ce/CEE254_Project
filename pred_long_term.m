@@ -58,20 +58,22 @@ subset_table = {'pm2d5', 'humidity', 'temperature', 'lat', 'lon', ...
 
 tbl_subset = tbl_all(:, subset_table);
 
-cvgprMdl_trial = fitrgp(tbl_subset, 'pm2d5', ...
-    'KernelFunction','ardsquaredexponential',...
-    'FitMethod', 'fic', 'PredictMethod', 'fic',...
-    'Standardize',true, 'Holdout', 0.3);
+% cvgprMdl_trial = fitrgp(tbl_subset, 'pm2d5', ...
+%     'KernelFunction','ardsquaredexponential',...
+%     'FitMethod', 'do', 'PredictMethod', 'fic',...
+%     'Standardize',true, 'Holdout', 0.3);
 
-kfoldLoss(cvgprMdl_trial);
+load("gpr_trial_result_matlab_2023-11-14_01_11.mat");
 
-ypred = kfoldPredict(cvgprMdl_trial);
+% kfoldLoss(cvgprMdl_trial);
+
+% ypred = kfoldPredict(cvgprMdl_trial);
 
 figure();
 plot(ypred(cvgprMdl_trial.Partition.test));
 hold on;
-y = table2array(tbl(:,end));
-plot(y(cvgprMdl.Partition.test),'r.');
+y = table2array(tbl_subset(:,1));
+plot(y(cvgprMdl_trial.Partition.test),'r.');
 axis([0 1050 0 30]);
 xlabel('x')
 ylabel('y')
@@ -195,6 +197,14 @@ function [tbl_all] = vertcat_tables(ld_file)
     end
 end
 
+function [feat_sin, feat_cos] = cyc_feat_transf(data, period)
+    feat_sin = sin(2*pi*data/period);
+    feat_cos = cos(2*pi*data/period);
+
+end
+
+
+%% Deprecated
 function [comb_table] = comb_tables(lddt,time)
     % Input params:
     % lddt: loaded data
@@ -237,8 +247,3 @@ function [comb_table] = comb_tables(lddt,time)
 
 end
 
-function [feat_sin, feat_cos] = cyc_feat_transf(data, period)
-    feat_sin = sin(2*pi*data/period);
-    feat_cos = cos(2*pi*data/period);
-
-end
