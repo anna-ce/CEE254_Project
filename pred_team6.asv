@@ -4,8 +4,7 @@ clear; clc; close all;
 %% Analysis Control
 
 % Hyp. param. opt. (training) or making predictions for test data (test)
-% predopt.stage = "training";
-predopt.stage = "training_local";
+predopt.stage = "training";
 % predopt.stage = "test";
 
 % Which type of prediction to make
@@ -138,8 +137,7 @@ end
 
 %% Additional feature generation
 train_data_ppc.sensor_labels = sensor_labels;
-% tbl_all = train_data_ppc;
-tbl_all = rmmissing(train_data_ppc);
+tbl_all = train_data_ppc;
 % Cyclic features related to-
 % for weekday (1~7)
 [day_sin, day_cos] = cyc_feat_transf(weekday(tbl_all.time),7);
@@ -172,21 +170,9 @@ switch predopt.mode
             'day_sin', 'day_cos', 'hour_sin', 'hour_cos'};
 end
 
-idx_rand_samp = randsample(transpose(1:1:size(tbl_all,1)),2000+2000*0.2);
+y = randsample([50:100],20)
 
-switch predopt.stage
-    case "training_local"
-        tbl_subset = tbl_all(idx_rand_samp, subset_table);
-        sens_group = categorical(sensor_labels(idx_rand_samp));
-
-    case "training"
-        tbl_subset = tbl_all(:, subset_table);
-        sens_group = categorical(sensor_labels);
-
-    case "test"
-        % modify this so that it takes in all and no cv on gpr
-
-end
+tbl_subset = tbl_all(:, subset_table);
 
 % cvgprMdl_trial = fitrgp(tbl_subset, 'pm2d5', ...
 %     'KernelFunction','ardsquaredexponential',...
@@ -196,6 +182,7 @@ end
 % for training/hyperparamopt
 
 % prepare categorical array for stratified CV
+sens_group = categorical(sensor_labels);
 cvp = cvpartition(sens_group, "Holdout", 0.2, "Stratify",true);
 
 % train GPR, hyperparameter optimization
