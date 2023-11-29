@@ -3,6 +3,7 @@ clear; clc; close all;
 
 %% Analysis Control
 predopt.mode = "long-term";
+% predopt.mode = "short-term";
 
 %% Load data
 % TODO to be replaced by preprocessed data
@@ -12,7 +13,6 @@ switch predopt.mode
 
     case "short-term"
         fldt = load("short_term_foshan_train_val.mat");
-
 end
 
 % Aggregated table
@@ -58,29 +58,29 @@ subset_table = {'pm2d5', 'humidity', 'temperature', 'lat', 'lon', ...
 
 tbl_subset = tbl_all(:, subset_table);
 
+
+
 % cvgprMdl_trial = fitrgp(tbl_subset, 'pm2d5', ...
 %     'KernelFunction','ardsquaredexponential',...
-%     'FitMethod', 'do', 'PredictMethod', 'fic',...
+%     'FitMethod', 'fic', 'PredictMethod', 'fic',...
 %     'Standardize',true, 'Holdout', 0.3);
 
 load("gpr_trial_result_matlab_2023-11-14_01_11.mat");
 
 % kfoldLoss(cvgprMdl_trial);
 
-% ypred = kfoldPredict(cvgprMdl_trial);
+ypred = kfoldPredict(cvgprMdl_trial);
 
 figure();
-plot(ypred(cvgprMdl_trial.Partition.test));
+time_test = tbl_all.time(cvgprMdl_trial.Partition.test);
+scatter(time_test, ypred(cvgprMdl_trial.Partition.test));
 hold on;
 y = table2array(tbl_subset(:,1));
-plot(y(cvgprMdl_trial.Partition.test),'r.');
-axis([0 1050 0 30]);
-xlabel('x')
-ylabel('y')
+scatter(time_te, y(cvgprMdl_trial.Partition.test),'r.');
+% axis([0 1050 0 30]);
+xlabel('Time');
+ylabel('pmd2d5');
 hold off;
-
-figure;
-
 
 
 %% Basic time series plots
