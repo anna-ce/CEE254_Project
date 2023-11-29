@@ -125,7 +125,8 @@ for i = 1:1:num_sensors
 
     % Create label for sensor
     var_in_lat = var(sensi_tbl_ppc.lat);
-    if var_in_lat > 1e-10 % very ad-hoc solution! watch out!
+    disp(var_in_lat);
+    if var_in_lat > 1e-10
         sensor_counter_mobile = sensor_counter_mobile + 1;
         label = strcat("m", num2str(sensor_counter_mobile));
     else
@@ -156,11 +157,11 @@ tbl_all.hour_cos = hour_cos;
 
 %% GPR
 switch predopt.mode
-    case "long_term"
+    case "long-term"
         subset_table = {'pm2d5', 'hmd', 'tmp', 'lat', 'lon', ...
             'day_sin', 'day_cos', 'hour_sin', 'hour_cos'};
 
-    case "short_term"
+    case "short-term"
         subset_table = {'pm2d5', 'hmd', 'tmp', 'lat', 'lon', ...
             'day_sin', 'day_cos', 'hour_sin', 'hour_cos'};
 
@@ -179,25 +180,15 @@ tbl_subset = tbl_all(:, subset_table);
 % for training/hyperparamopt
 
 % prepare categorical array for stratified CV
-sens_group = categorical(sensor_labels);
-cvp = cvpartition(sens_group, "Holdout", 0.2, "Stratify",true);
+sensor_labels =
+
 gprMdl = fitrgp(tbl_subset, 'pm2d5',...
         'FitMethod', 'fic', 'PredictMethod', 'fic', 'Standardize', 1,...
         'BasisFunction','constant',...
         'OptimizeHyperparameters', {'KernelFunction','KernelScale','Sigma'},...
-        'Optimizer','fmincon',...
         'HyperparameterOptimizationOptions', ...
-        struct('MaxObjectiveEvaluations', 50, ...
-        'UseParallel', true, ...
-        'CVPartition', cvp));
-
-res_save_name = strcat("GPR_", ...
-    predopt.stage, "_", ...
-    predopt.mode, "_var_", ...
-    num2str(predopt.var_level,"%02d"), "_", ...
-    string(datetime('now'),'yyyy-MM-dd_Hmmss'), ".mat");
-
-save(res_save_name);
+        struct('MaxObjectiveEvaluations', 50, 'UseParallel', true),...
+        'Optimizer','fmincon');
 
 % gprMdl = fitrgp(tbl_subset, 'pm2d5','KernelFunction','ardrationalquadratic',...
 %         'FitMethod','fic','PredictMethod','fic','Standardize',1,...
@@ -208,7 +199,7 @@ save(res_save_name);
 % for test dataset prediction
 
 
-% ypred = kfoldPredict(cvgprMdl_trial);
+ypred = kfoldPredict(cvgprMdl_trial);
 
 if predopt.out_fig == 1
     figure;
