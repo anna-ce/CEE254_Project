@@ -8,8 +8,8 @@ predopt.stage = "training";
 % predopt.stage = "test";
 
 % Which type of prediction to make
-% predopt.mode = "short_term";
-predopt.mode = "long_term";
+predopt.mode = "short_term";
+% predopt.mode = "long_term";
 % predopt.mode = "interpolation";
 
 % Added noise level
@@ -38,7 +38,7 @@ end
 trainf_fname = trainf_prefix_1 + predopt.mode + "_" + ...
     num2str(predopt.var_level) + "_var.mat";
 
-data_dir = "\data\";
+data_dir = strcat(filesep, "data", filesep); % platform agnostic filesep
 
 trainf_full = pwd() + data_dir + trainf_fname;
 
@@ -181,6 +181,8 @@ tbl_subset = tbl_all(:, subset_table);
 % prepare categorical array for stratified CV
 sens_group = categorical(sensor_labels);
 cvp = cvpartition(sens_group, "Holdout", 0.2, "Stratify",true);
+
+% train GPR, hyperparameter optimization
 gprMdl = fitrgp(tbl_subset, 'pm2d5',...
         'FitMethod', 'fic', 'PredictMethod', 'fic', 'Standardize', 1,...
         'BasisFunction','constant',...
@@ -188,7 +190,7 @@ gprMdl = fitrgp(tbl_subset, 'pm2d5',...
         'Optimizer','fmincon',...
         'HyperparameterOptimizationOptions', ...
         struct('MaxObjectiveEvaluations', 50, ...
-        'UseParallel', true, ...
+        'UseParallel', false, ...
         'CVPartition', cvp));
 
 res_save_name = strcat("GPR_", ...
@@ -321,24 +323,24 @@ end
 % web(filename);
 
 %% In-line functions
-function [tbl_all] = vertcat_tables(ld_file)
-    % new giant table, with info about where it came from
-    tbl_all = table();
-    
-    for idx_ss = 1:1:size(ld_file.data_static,2)
-        some_table = ld_file.data_static{1,idx_ss};
-        some_table.sensor_type = repmat("static",size(some_table,1),1);
-        some_table.sensor_num = repmat(idx_ss,size(some_table,1),1);
-        tbl_all = vertcat(tbl_all, some_table);
-    end
-    
-    for idx_ms = 1:1:size(ld_file.data_mobile,2)
-        some_table = ld_file.data_mobile{1,idx_ms};
-        some_table.sensor_type = repmat("mobile",size(some_table,1),1);
-        some_table.sensor_num = repmat(idx_ms,size(some_table,1),1);
-        tbl_all = vertcat(tbl_all, some_table);
-    end
-end
+% function [tbl_all] = vertcat_tables(ld_file)
+%     % new giant table, with info about where it came from
+%     tbl_all = table();
+% 
+%     for idx_ss = 1:1:size(ld_file.data_static,2)
+%         some_table = ld_file.data_static{1,idx_ss};
+%         some_table.sensor_type = repmat("static",size(some_table,1),1);
+%         some_table.sensor_num = repmat(idx_ss,size(some_table,1),1);
+%         tbl_all = vertcat(tbl_all, some_table);
+%     end
+% 
+%     for idx_ms = 1:1:size(ld_file.data_mobile,2)
+%         some_table = ld_file.data_mobile{1,idx_ms};
+%         some_table.sensor_type = repmat("mobile",size(some_table,1),1);
+%         some_table.sensor_num = repmat(idx_ms,size(some_table,1),1);
+%         tbl_all = vertcat(tbl_all, some_table);
+%     end
+% end
 
 function [feat_sin, feat_cos] = cyc_feat_transf(data, period)
     feat_sin = sin(2*pi*data/period);
@@ -348,45 +350,45 @@ end
 
 
 %% Deprecated
-function [comb_table] = comb_tables(lddt,time)
-    % Input params:
-    % lddt: loaded data
-    
-    % Create NaN for humidity, speed, temp., pm2d5, lat, lon
-    dat_ncol = size(lddt.data_static,2) + size(lddt.data_mobile,2);
-    dat_nrow = size(time,1);
-
-    humidity = NaN(dat_nrow,dat_ncol);
-    speed = NaN(dat_nrow,dat_ncol);
-    temperature = NaN(dat_nrow,dat_ncol);
-    pm2d5 = NaN(dat_nrow,dat_ncol);
-    lat = NaN(dat_nrow,dat_ncol);
-    lon = NaN(dat_nrow,dat_ncol);
-
-    comb_table = table(time,humidity,speed,temperature,pm2d5,lat,lon);
-
-    for idx_s = 1:1:size(lddt.data_static,2)
-        [LocA, LocB] = ismember(lddt.data_static{1,idx_s}.time,time);
-        comb_table.humidity(LocB,idx_s) = lddt.data_static{1,idx_s}.humidity(LocA, :);
-        comb_table.speed(LocB,idx_s) = lddt.data_static{1,idx_s}.speed(LocA, :);
-        comb_table.temperature(LocB,idx_s) = lddt.data_static{1,idx_s}.temperature(LocA, :);
-        comb_table.pm2d5(LocB,idx_s) = lddt.data_static{1,idx_s}.pm2d5(LocA, :);
-        comb_table.lat(LocB,idx_s) = lddt.data_static{1,idx_s}.lat(LocA, :);
-        comb_table.lon(LocB,idx_s) = lddt.data_static{1,idx_s}.lon(LocA, :);
-    end
-    
-    % start index from end of num. of static sensors
-    idx_m_start = size(lddt.data_static,2);
-    for idx_m = 1:1:size(lddt.data_mobile,2)
-        [LocA, LocB] = ismember(lddt.data_mobile{1,idx_s}.time,time);
-        idx_mt = idx_m_start + idx_m;
-        comb_table.humidity(LocB,idx_mt) = lddt.data_mobile{1,idx_s}.humidity(LocA, :);
-        comb_table.speed(LocB,idx_mt) = lddt.data_mobile{1,idx_s}.speed(LocA, :);
-        comb_table.temperature(LocB,idx_mt) = lddt.data_mobile{1,idx_s}.temperature(LocA, :);
-        comb_table.pm2d5(LocB,idx_mt) = lddt.data_mobile{1,idx_s}.pm2d5(LocA, :);
-        comb_table.lat(LocB,idx_mt) = lddt.data_mobile{1,idx_s}.lat(LocA, :);
-        comb_table.lon(LocB,idx_mt) = lddt.data_mobile{1,idx_s}.lon(LocA, :);
-    end
-
-end
+% function [comb_table] = comb_tables(lddt,time)
+%     % Input params:
+%     % lddt: loaded data
+% 
+%     % Create NaN for humidity, speed, temp., pm2d5, lat, lon
+%     dat_ncol = size(lddt.data_static,2) + size(lddt.data_mobile,2);
+%     dat_nrow = size(time,1);
+% 
+%     humidity = NaN(dat_nrow,dat_ncol);
+%     speed = NaN(dat_nrow,dat_ncol);
+%     temperature = NaN(dat_nrow,dat_ncol);
+%     pm2d5 = NaN(dat_nrow,dat_ncol);
+%     lat = NaN(dat_nrow,dat_ncol);
+%     lon = NaN(dat_nrow,dat_ncol);
+% 
+%     comb_table = table(time,humidity,speed,temperature,pm2d5,lat,lon);
+% 
+%     for idx_s = 1:1:size(lddt.data_static,2)
+%         [LocA, LocB] = ismember(lddt.data_static{1,idx_s}.time,time);
+%         comb_table.humidity(LocB,idx_s) = lddt.data_static{1,idx_s}.humidity(LocA, :);
+%         comb_table.speed(LocB,idx_s) = lddt.data_static{1,idx_s}.speed(LocA, :);
+%         comb_table.temperature(LocB,idx_s) = lddt.data_static{1,idx_s}.temperature(LocA, :);
+%         comb_table.pm2d5(LocB,idx_s) = lddt.data_static{1,idx_s}.pm2d5(LocA, :);
+%         comb_table.lat(LocB,idx_s) = lddt.data_static{1,idx_s}.lat(LocA, :);
+%         comb_table.lon(LocB,idx_s) = lddt.data_static{1,idx_s}.lon(LocA, :);
+%     end
+% 
+%     % start index from end of num. of static sensors
+%     idx_m_start = size(lddt.data_static,2);
+%     for idx_m = 1:1:size(lddt.data_mobile,2)
+%         [LocA, LocB] = ismember(lddt.data_mobile{1,idx_s}.time,time);
+%         idx_mt = idx_m_start + idx_m;
+%         comb_table.humidity(LocB,idx_mt) = lddt.data_mobile{1,idx_s}.humidity(LocA, :);
+%         comb_table.speed(LocB,idx_mt) = lddt.data_mobile{1,idx_s}.speed(LocA, :);
+%         comb_table.temperature(LocB,idx_mt) = lddt.data_mobile{1,idx_s}.temperature(LocA, :);
+%         comb_table.pm2d5(LocB,idx_mt) = lddt.data_mobile{1,idx_s}.pm2d5(LocA, :);
+%         comb_table.lat(LocB,idx_mt) = lddt.data_mobile{1,idx_s}.lat(LocA, :);
+%         comb_table.lon(LocB,idx_mt) = lddt.data_mobile{1,idx_s}.lon(LocA, :);
+%     end
+% 
+% end
 
