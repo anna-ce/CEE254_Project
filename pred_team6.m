@@ -8,9 +8,14 @@ clear; clc; close all;
 predopt.stage = "training_local";
 % predopt.stage = "test";
 
+predopt.train_local_sizes = [12000*0.8, 12000*0.2]; % train test sampling sizes
+
+% where is the data directory (folder that contains train, test data)
+data_dir = strcat(filesep, "data", filesep); % platform agnostic filesep
+
 % Which type of prediction to make
-predopt.mode = "short_term";
-% predopt.mode = "long_term";
+% predopt.mode = "short_term";
+predopt.mode = "long_term";
 % predopt.mode = "interpolation";
 
 % Added noise level
@@ -22,9 +27,8 @@ predopt.var_level = 0;
 predopt.out_disp = 0;
 predopt.out_fig = 0;
 
-%% Load data
-trainf_prefix_1 = "train_data_";
 
+%% Load data
 switch predopt.mode
     case "short_term"
         problem_type = 1;
@@ -36,13 +40,15 @@ switch predopt.mode
         problem_type = 3;
 end
 
+% Create filename to load from load options
+trainf_prefix_1 = "train_data_";
 trainf_fname = trainf_prefix_1 + predopt.mode + "_" + ...
     num2str(predopt.var_level) + "_var.mat";
 
-data_dir = strcat(filesep, "data", filesep); % platform agnostic filesep
-
+% full path and filename (train)
 trainf_full = pwd() + data_dir + trainf_fname;
 
+% full path and filename (test)
 testf_prefix_1 = "test_data_";
 testf_fname = testf_prefix_1 + predopt.mode + "_" + ...
     num2str(predopt.var_level) + "_var.mat";
@@ -53,6 +59,7 @@ load(trainf_full);
 load(testf_full);
 
 %% Data preprocessing
+% sensor separation
 time_o = train_data.time; % original time
 time_o_ns = time_o(1:end-1); % original time except for last datetime
 time_o_ys = time_o(2:end); % shifted by 1
@@ -70,18 +77,19 @@ idx_sensors(size(idx_sensors,1),2) = size(time_o,1);
 idx_sensors(2:end,1) = idx_sensor_change + 1;
 
 %% Preprocessing
+% copy table for preprocessed data
 train_data_ppc = train_data;
-sensor_labels = strings(size(train_data,1),1);
-sensor_counter_static = 0;
-sensor_counter_mobile = 0;
+sensor_labels = strings(size(train_data,1),1); % labels for each sensor
+sensor_counter_static = 0; % counter for static sensor
+sensor_counter_mobile = 0; % counter for mobile sensor
 
-% Begin preprocessing stage for all sensors
+% Begin preprocessing stage for each sensors
 for i = 1:1:num_sensors
     % new table for each sensor
     sensi_tbl = train_data(idx_sensors(i,1):idx_sensors(i,2),:);
     
     % Outlier removal
-    % TODO tune this so that it does not get rid of legitimate data points
+    % TODO tune this so that it does not get rid of real data points
     idx_outlier = isoutlier(sensi_tbl.pm2d5,...
         "movmedian", minutes(30), ...
         "ThresholdFactor", 6, ...
@@ -91,7 +99,7 @@ for i = 1:1:num_sensors
     if predopt.out_disp == 1
         disp("Number of outliers: " + num2str(sum(idx_outlier)));
     end
-
+    
     % Visualize outliers
     if predopt.out_fig == 1
         figure;
@@ -126,7 +134,7 @@ for i = 1:1:num_sensors
 
     % Create label for sensor
     var_in_lat = var(sensi_tbl_ppc.lat);
-    if var_in_lat > 1e-10 % very ad-hoc solution! watch out!
+    if var_in_lat > 1e-10 % warning! very ad-hoc threshold-based solution!
         sensor_counter_mobile = sensor_counter_mobile + 1;
         label = strcat("m", num2str(sensor_counter_mobile));
     else
@@ -137,9 +145,12 @@ for i = 1:1:num_sensors
 end
 
 %% Additional feature generation
+% add sensor_labels to the preprocessed data
 train_data_ppc.sensor_labels = sensor_labels;
-% tbl_all = train_data_ppc;
+
+% remove NaN from table
 tbl_all = rmmissing(train_data_ppc);
+
 % Cyclic features related to-
 % for weekday (1~7)
 [day_sin, day_cos] = cyc_feat_transf(weekday(tbl_all.time),7);
@@ -158,7 +169,7 @@ tbl_all.hour_cos = hour_cos;
 
 
 %% GPR
-switch predopt.mode
+switch predopt.mode % which features to use depending on problem
     case "long_term"
         subset_table = {'pm2d5', 'hmd', 'tmp', 'lat', 'lon', ...
             'day_sin', 'day_cos', 'hour_sin', 'hour_cos'};
@@ -172,10 +183,11 @@ switch predopt.mode
             'day_sin', 'day_cos', 'hour_sin', 'hour_cos'};
 end
 
-idx_rand_samp = randsample(transpose(1:1:size(tbl_all,1)),2000+2000*0.2);
-
 switch predopt.stage
     case "training_local"
+        num_smpl = sum(predopt.train_local_sizes);
+        idx_rand_samp = randsample( ...
+            transpose(1:1:size(tbl_all,1)),num_smpl);
         tbl_subset = tbl_all(idx_rand_samp, subset_table);
         sens_group = categorical(sensor_labels(idx_rand_samp));
 
@@ -184,8 +196,8 @@ switch predopt.stage
         sens_group = categorical(sensor_labels);
 
     case "test"
-        % modify this so that it takes in all and no cv on gpr
-
+        tbl_subset = tbl_all(:, subset_table);
+        sens_group = categorical(sensor_labels);
 end
 
 % cvgprMdl_trial = fitrgp(tbl_subset, 'pm2d5', ...
@@ -202,18 +214,42 @@ cvp = cvpartition(sens_group, "Holdout", 0.2, "Stratify",true);
 gprMdl = fitrgp(tbl_subset, 'pm2d5',...
         'FitMethod', 'fic', 'PredictMethod', 'fic', 'Standardize', 1,...
         'BasisFunction','constant',...
-        'OptimizeHyperparameters', {'KernelFunction','KernelScale','Sigma'},...
+        'OptimizeHyperparameters', ...
+        'all',...
         'Optimizer','fmincon',...
         'HyperparameterOptimizationOptions', ...
-        struct('MaxObjectiveEvaluations', 50, ...
+        struct('MaxObjectiveEvaluations', 100, ...
         'UseParallel', false, ...
+        'SaveIntermediateResults', true, ...
+        'MaxTime', 60*60*8, ... % 8 hours running time limit
+        'Verbose', predopt.out_disp, ...
         'CVPartition', cvp));
+
+save(res_save_name);
+
+y_true = tbl_subset.pm2d5(cvp.test,:);
+y_pred = predict(gprMdl,tbl_subset(cvp.test,:));
+new_tmp_mean = repmat(mean(tbl_subset.tmp),size(tbl_subset,1),1);
+tbl_subset_notmp = tbl_subset;
+
+% tbl_subset_notmp.tmp = new_tmp_mean;
+
+if predopt.out_fig == 1
+    figure;
+    plot(y_true);
+    hold on;
+    plot(y_pred);
+end
+
+y_pred_notmp = predict(gprMdl,tbl_subset_notmp(cvp.test,:));
+
+fit_nrmse = goodnessOfFit(y_pred,y_true,'NRMSE');
 
 res_save_name = strcat("GPR_", ...
     predopt.stage, "_", ...
     predopt.mode, "_var_", ...
     num2str(predopt.var_level,"%02d"), "_", ...
-    string(datetime('now'),'yyyy-MM-dd_Hmmss'), ".mat");
+    string(datetime('now'),'yyyy-MM-dd_HHmmss'), ".mat");
 
 save(res_save_name);
 
@@ -358,11 +394,11 @@ end
 %     end
 % end
 
-function [feat_sin, feat_cos] = cyc_feat_transf(data, period)
-    feat_sin = sin(2*pi*data/period);
-    feat_cos = cos(2*pi*data/period);
-
-end
+% function [feat_sin, feat_cos] = cyc_feat_transf(data, period)
+%     feat_sin = sin(2*pi*data/period);
+%     feat_cos = cos(2*pi*data/period);
+% 
+% end
 
 
 %% Deprecated

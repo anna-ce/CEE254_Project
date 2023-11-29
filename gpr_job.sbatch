@@ -5,6 +5,6 @@
 #SBATCH --time=10:00:00
 #SBATCH -p normal
 #SBATCH -c 4
-#SBATCH --mem=32GB
+#SBATCH --mem=64GB
 module load matlab
 matlab -nodesktop < pred_team6.m
