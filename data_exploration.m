@@ -10,7 +10,24 @@ dt_end = datetime("2018-05-22T00:00",'InputFormat','uuuu-MM-dd''T''HH:mm');
 
 time = transpose(dt_start:minutes(1):dt_end);
 
-comb_table = comb_tables(tjlt,time);
+% new giant table, with info about where it came from
+table_all = table();
+
+for idx_ss = 1:1:size(tjlt.data_static,2)
+    some_table = tjlt.data_static{1,idx_ss};
+    some_table.sensor_type = repmat("static",size(some_table,1),1);
+    some_table.sensor_num = repmat(idx_ss,size(some_table,1),1);
+    table_all = vertcat(table_all, some_table);
+end
+
+for idx_ms = 1:1:size(tjlt.data_mobile,2)
+    some_table = tjlt.data_mobile{1,idx_ms};
+    some_table.sensor_type = repmat("mobile",size(some_table,1),1);
+    some_table.sensor_num = repmat(idx_ms,size(some_table,1),1);
+    table_all = vertcat(table_all, some_table);
+end
+
+comb_table = table_all;
 
 % Weekly
 % how many weeks in data? 
@@ -30,32 +47,66 @@ comb_table.day_cos = day_cos;
 comb_table.hour_sin = hour_sin;
 comb_table.hour_cos = hour_cos;
 
-figure;
+% figure;
 % scatter(comb_table.day_sin, comb_table.pm2d5);
-scatter(comb_table.day_cos, comb_table.day_sin);
+% scatter(comb_table.day_cos, comb_table.day_sin);
+
+%% Some scatter plots
+
+
+%% Test GPR
+% predictors_2_use = {'humiditiy', 'temperature', 'lat', 'lon', 'day_sin', 'day_cos', 'hour_sin', 'hour_cos'};
+predictors_2_use = {'lat', 'lon', 'day_sin', 'day_cos', 'hour_sin', 'hour_cos'};
+
+% gprMdl_trial = fitrgp(comb_table, 'ResponseVarName', {'pm2d5'}, 'PredictorNames', predictors_2_use, 'FitMethod', 'fic', ...
+%     'Standardize',true, 'Holdout', 0.3);
+
+% gprMdl_trial = fitrgp('Tbl', comb_table, 'formula', 'pm2d5~lat+lon+day_sin+day_cos+hour_sin+hour_cos', 'FitMethod', 'fic', ...
+%     'Standardize', true, 'Holdout', 0.3);
+
+
+gprMdl_trial = fitrgp(comb_table.pm2d5, comb_table.humidity);
+
+% y~x1+x2+x3
+
+kfoldLoss(gprMdl_trial)
+
+ypred = kfoldPredict(gprMdl_trial);
+
+figure();
+plot(ypred(gprMdl_trial.Partition.test));
+hold on;
+y = table2array(tbl(:,end));
+plot(y(cvgprMdl.Partition.test),'r.');
+axis([0 1050 0 30]);
+xlabel('x')
+ylabel('y')
+hold off;
+
+figure;
+
+
 
 %% Basic time series plots
-C_1 = linspecer(6);
-static_slc = 1:1:6;
-mobile_slc = 7:1:13;
-lgd_ss = strings(size(static_slc,2));
-lgd_ms = strings(size(mobile_slc,2)); 
-
-fig_ts_ss = figure;
-tl_ss = tiledlayout(size(static_slc,2),1);
-ax_ss = gobjects(1,size(static_slc,2));
-for idx_ss = static_slc
-    ax_ss_i = nexttile;
-    ax_ss(1,idx_ss) = ax_ss_i;
-    nan_idx = isnan(comb_table.pm2d5(:,idx_ss));
-    plot(comb_table.time(~nan_idx), comb_table.pm2d5(~nan_idx,idx_ss),...
-        'Marker', '.', 'LineStyle', '-', 'Color', C_1(idx_ss,:));
-        % 'LineStyle', '-', 'Color', C_1(idx_ss,:));
-        % 'Marker', '.', 'LineStyle', '-', 'Color', C_1(idx_ss,:));
-    title(strcat("Static Sensor ", num2str(idx_ss)));
-end
-
-linkaxes(ax_ss,'xy');
+% C_1 = linspecer(6);
+% static_slc = 1:1:6;
+% mobile_slc = 7:1:13;
+% lgd_ss = strings(size(static_slc,2));
+% lgd_ms = strings(size(mobile_slc,2)); 
+% 
+% fig_ts_ss = figure;
+% tl_ss = tiledlayout(size(static_slc,2),1);
+% ax_ss = gobjects(1,size(static_slc,2));
+% for idx_ss = static_slc
+%     ax_ss_i = nexttile;
+%     ax_ss(1,idx_ss) = ax_ss_i;
+%     nan_idx = isnan(comb_table.pm2d5(:,idx_ss));
+%     plot(comb_table.time(~nan_idx), comb_table.pm2d5(~nan_idx,idx_ss),...
+%         'Marker', '.', 'LineStyle', '-', 'Color', C_1(idx_ss,:));
+%     title(strcat("Static Sensor ", num2str(idx_ss)));
+% end
+% 
+% linkaxes(ax_ss,'xy');
 % legend(num2str(static_slc'));
 
 
