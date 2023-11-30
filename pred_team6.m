@@ -87,7 +87,21 @@ sensor_counter_mobile = 0; % counter for mobile sensor
 for i = 1:1:num_sensors
     % new table for each sensor
     sensi_tbl = train_data(idx_sensors(i,1):idx_sensors(i,2),:);
-    
+
+    % Create label for sensor
+    var_in_lat = var(sensi_tbl.lat);
+    if var_in_lat > 1e-10 % warning! very ad-hoc threshold-based solution!
+        % it is mobile!
+        sensor_counter_mobile = sensor_counter_mobile + 1;
+        label = strcat("m", num2str(sensor_counter_mobile));
+    else
+        % it is static!
+        sensor_counter_static = sensor_counter_static + 1;
+        label = strcat("s", num2str(sensor_counter_static));
+    end
+    sensor_labels(idx_sensors(i,1):idx_sensors(i,2),:) = label;
+
+    % if putting different thresholds for outlier detection by sensor
     % Outlier removal
     % TODO tune this so that it does not get rid of real data points
     idx_outlier = isoutlier(sensi_tbl.pm2d5,...
@@ -130,18 +144,7 @@ for i = 1:1:num_sensors
     end
     
     % Fill 'train_data_ppc.pm2d5' with preprocessed data
-    train_data_ppc.pm2d5(idx_sensors(i,1):idx_sensors(i,2),:) = pm2d5_f0;
-
-    % Create label for sensor
-    var_in_lat = var(sensi_tbl_ppc.lat);
-    if var_in_lat > 1e-10 % warning! very ad-hoc threshold-based solution!
-        sensor_counter_mobile = sensor_counter_mobile + 1;
-        label = strcat("m", num2str(sensor_counter_mobile));
-    else
-        sensor_counter_static = sensor_counter_static + 1;
-        label = strcat("s", num2str(sensor_counter_static));
-    end
-    sensor_labels(idx_sensors(i,1):idx_sensors(i,2),:) = label;
+    train_data_ppc.pm2d5(idx_sensors(i,1):idx_sensors(i,2),:) = pm2d5_f0;    
 end
 
 %% Additional feature generation
@@ -186,10 +189,20 @@ end
 switch predopt.stage
     case "training_local"
         num_smpl = sum(predopt.train_local_sizes);
-        idx_rand_samp = randsample( ...
-            transpose(1:1:size(tbl_all,1)),num_smpl);
-        tbl_subset = tbl_all(idx_rand_samp, subset_table);
-        sens_group = categorical(sensor_labels(idx_rand_samp));
+        switch predopt.sampling
+            % Random sampling from the entire training data
+            case "random"
+                idx_samp = randsample( ...
+                    transpose(1:1:size(tbl_all,1)),num_smpl);
+            % Temporal order, e.g. the last parts of the data
+            case "last_num_smpl"
+                idx_train_time_start = size(tbl_all,1) - num_smpl + 1;
+                idx_train_time_end = size(tbl_all,1);
+                idx_samp = idx_train_time_start:1:idx_train_time_end;
+        end
+        % slice tbl_subset
+        tbl_subset = tbl_all(idx_samp, subset_table);
+        sens_group = categorical(sensor_labels(idx_samp));
 
     case "training"
         tbl_subset = tbl_all(:, subset_table);
@@ -211,6 +224,8 @@ end
 cvp = cvpartition(sens_group, "Holdout", 0.2, "Stratify",true);
 
 % train GPR, hyperparameter optimization
+glmMdl = fitglm(tbl_subset, 'pm2d5~hmd+tmp+lat+lon');
+
 gprMdl = fitrgp(tbl_subset, 'pm2d5',...
         'FitMethod', 'fic', 'PredictMethod', 'fic', 'Standardize', 1,...
         'BasisFunction','constant',...
