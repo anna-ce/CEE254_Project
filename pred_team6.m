@@ -8,6 +8,8 @@ clear; clc; close all;
 predopt.stage = "training_local";
 % predopt.stage = "test";
 
+predopt.sampling = "last_num_smpl";
+
 predopt.train_local_sizes = [12000*0.8, 12000*0.2]; % train test sampling sizes
 
 % where is the data directory (folder that contains train, test data)
@@ -224,7 +226,11 @@ end
 cvp = cvpartition(sens_group, "Holdout", 0.2, "Stratify",true);
 
 % train GPR, hyperparameter optimization
+y_true = tbl_subset.pm2d5(cvp.test,:);
+
 glmMdl = fitglm(tbl_subset, 'pm2d5~hmd+tmp+lat+lon');
+y_pred_glm = predict(glmMdl,tbl_subset(cvp.test,:));
+fit_nrmse_glm = goodnessOfFit(y_pred_glm,y_true,'NRMSE');
 
 gprMdl = fitrgp(tbl_subset, 'pm2d5',...
         'FitMethod', 'fic', 'PredictMethod', 'fic', 'Standardize', 1,...
@@ -242,7 +248,6 @@ gprMdl = fitrgp(tbl_subset, 'pm2d5',...
 
 save(res_save_name);
 
-y_true = tbl_subset.pm2d5(cvp.test,:);
 y_pred = predict(gprMdl,tbl_subset(cvp.test,:));
 new_tmp_mean = repmat(mean(tbl_subset.tmp),size(tbl_subset,1),1);
 tbl_subset_notmp = tbl_subset;
