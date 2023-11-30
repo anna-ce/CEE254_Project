@@ -27,7 +27,7 @@ predopt.var_level = 0;
 
 % Output display messages and figures is set to 1
 predopt.out_disp = 0;
-predopt.out_fig = 0;
+predopt.out_fig = 1;
 
 
 %% Load data
@@ -96,20 +96,24 @@ for i = 1:1:num_sensors
         % it is mobile!
         sensor_counter_mobile = sensor_counter_mobile + 1;
         label = strcat("m", num2str(sensor_counter_mobile));
+
+        idx_outlier = isoutlier(sensi_tbl.pm2d5,...
+            "movmedian", minutes(30), ...
+            "ThresholdFactor", 6, ...
+            "SamplePoints", sensi_tbl.time);
     else
         % it is static!
         sensor_counter_static = sensor_counter_static + 1;
         label = strcat("s", num2str(sensor_counter_static));
-    end
-    sensor_labels(idx_sensors(i,1):idx_sensors(i,2),:) = label;
 
-    % if putting different thresholds for outlier detection by sensor
-    % Outlier removal
-    % TODO tune this so that it does not get rid of real data points
-    idx_outlier = isoutlier(sensi_tbl.pm2d5,...
-        "movmedian", minutes(30), ...
-        "ThresholdFactor", 6, ...
-        "SamplePoints", sensi_tbl.time);
+        idx_outlier = isoutlier(sensi_tbl.pm2d5,...
+            "median", ...
+            "ThresholdFactor", 6, ...
+            "SamplePoints", sensi_tbl.time);
+    end
+    
+    sensor_labels(idx_sensors(i,1):idx_sensors(i,2),:) = label;
+    
 
     % Output how many outliers there are in data
     if predopt.out_disp == 1
@@ -124,7 +128,8 @@ for i = 1:1:num_sensors
         plot(sensi_tbl.time(idx_outlier), sensi_tbl.pm2d5(idx_outlier), 'xr');
         hold off;
     end
-
+    
+    % Outlier removal via NaN fill
     % New table for individual sensor, to be filled with preprocessed PM2D5
     sensi_tbl_ppc = sensi_tbl;
     sensi_tbl_ppc.pm2d5(idx_outlier) = NaN;
@@ -245,8 +250,6 @@ gprMdl = fitrgp(tbl_subset, 'pm2d5',...
         'MaxTime', 60*60*8, ... % 8 hours running time limit
         'Verbose', predopt.out_disp, ...
         'CVPartition', cvp));
-
-save(res_save_name);
 
 y_pred = predict(gprMdl,tbl_subset(cvp.test,:));
 new_tmp_mean = repmat(mean(tbl_subset.tmp),size(tbl_subset,1),1);
