@@ -17,7 +17,7 @@ predopt.stage = "test";
 predopt.hyperparam = 0; % needs to have predopt.stage as "training_local"
 
 % Training and test sizes
-predopt.train_local_sizes = [12000*1.00, 12000*0.25]; % train test sampling sizes
+predopt.train_local_sizes = [24000*1.00, 24000*0.25]; % train test sampling sizes
 % predopt.train_local_sizes = [2400*1.00, 2400*0.25]; % train test sampling sizes
 % predopt.train_local_sizes = [6000*1.00, 6000*0.25]; % train test sampling sizes
 % predopt.train_local_sizes = [6000*1.00, 6000*0.25]; % train test sampling sizes
